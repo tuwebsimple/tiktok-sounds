@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLIP — Audio to TikTok</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #ff3c5f;
+    --accent2: #ff8c42;
+    --text: #f0ede8;
+    --muted: #666;
+    --success: #3cffa0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.5;
+  }
+
+  header { padding: 28px 48px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .badge { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; }
+
+  main { max-width: 860px; margin: 0 auto; padding: 48px 48px; }
+  h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(32px, 5vw, 52px); line-height: 1.05; letter-spacing: -2px; margin-bottom: 10px; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 12px; letter-spacing: 1px; margin-bottom: 44px; }
+
+  .steps { display: flex; gap: 0; margin-bottom: 40px; }
+  .step { display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 10px 20px; border: 1px solid var(--border); margin-right: -1px; transition: all 0.3s; }
+  .step.active { color: var(--text); border-color: var(--accent); z-index: 1; }
+  .step.done { color: var(--success); border-color: var(--success); z-index: 1; }
+  .step-num { width: 20px; height: 20px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+
+  .panel { display: none; animation: fadeUp 0.4s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* SOURCE TABS */
+  .source-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin-bottom: 24px; }
+  .source-tab { padding: 20px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; text-align: center; transition: all 0.25s; margin-right: -1px; }
+  .source-tab:hover { border-color: #444; }
+  .source-tab.active { border-color: var(--accent); background: #1a0a0e; z-index: 1; }
+  .source-tab .tab-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+  .source-tab .tab-label { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; display: block; margin-bottom: 4px; }
+  .source-tab .tab-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
+  .source-panel { display: none; }
+  .source-panel.active { display: block; }
+
+  /* DROP ZONE */
+  .drop-zone { border: 1px dashed var(--border); padding: 60px 40px; text-align: center; cursor: pointer; transition: all 0.3s; position: relative; background: var(--surface); }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: #1a0a0e; }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 36px; margin-bottom: 14px; display: block; }
+  .drop-label { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .drop-sub { font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+  .file-info { display: none; background: var(--surface2); border: 1px solid var(--border); padding: 14px 20px; margin-top: 12px; font-size: 12px; }
+  .file-info.visible { display: flex; align-items: center; justify-content: space-between; }
+  .file-info .fname { color: var(--accent2); }
+  .file-info .fsize { color: var(--muted); }
+
+  /* RECORDER */
+  .recorder-box { background: var(--surface); border: 1px solid var(--border); padding: 32px; text-align: center; }
+  .rec-visualizer { width: 100%; height: 64px; margin-bottom: 24px; }
+  #recCanvas { width: 100%; height: 100%; display: block; }
+  .rec-timer { font-family: 'Syne', sans-serif; font-size: 48px; font-weight: 800; letter-spacing: -2px; margin-bottom: 8px; color: var(--text); transition: color 0.3s; }
+  .rec-timer.recording { color: var(--accent); }
+  .rec-status { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 24px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .rec-dot.pulse { background: var(--accent); animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+  .rec-controls { display: flex; justify-content: center; gap: 12px; align-items: center; }
+  .rec-btn { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border); background: none; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: all 0.25s; }
+  .rec-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .rec-btn.rec-main { width: 68px; height: 68px; border-color: var(--accent); background: var(--accent); color: white; font-size: 22px; }
+  .rec-btn.rec-main:hover { background: #ff1a3f; transform: scale(1.05); }
+  .rec-btn.rec-main.is-recording { background: none; color: var(--accent); }
+  .rec-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* SYSTEM AUDIO */
+  .sysaudio-box { background: var(--surface); border: 1px solid var(--border); padding: 32px; text-align: center; }
+  .sysaudio-icon { font-size: 48px; display: block; margin-bottom: 16px; }
+  .sysaudio-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .sysaudio-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; line-height: 1.7; margin-bottom: 24px; }
+  .os-warning { display: none; background: #1a1000; border: 1px solid #ff8c42; padding: 14px 18px; font-size: 11px; line-height: 1.7; color: var(--accent2); margin-bottom: 20px; text-align: left; }
+  .os-warning.visible { display: block; }
+  .os-warning a { color: var(--accent2); }
+  .sysaudio-timer { font-family: 'Syne', sans-serif; font-size: 48px; font-weight: 800; letter-spacing: -2px; margin-bottom: 8px; transition: color 0.3s; }
+  .sysaudio-timer.recording { color: var(--accent2); }
+  .sysaudio-status { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .sysaudio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .sysaudio-dot.pulse { background: var(--accent2); animation: blink 1s ease-in-out infinite; }
+  .sysaudio-vis { width: 100%; height: 56px; margin-bottom: 20px; }
+  #sysCanvas { width: 100%; height: 100%; display: block; }
+  .btn-sys { padding: 13px 32px; font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: none; background: var(--accent2); color: #000; }
+  .btn-sys:hover { background: #e87a30; transform: translateY(-1px); }
+  .btn-sys:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+  .sysaudio-controls { display: flex; justify-content: center; gap: 12px; }
+
+  /* SILENCE CONTROLS */
+  .threshold-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; background: var(--surface2); border: 1px solid var(--border); margin-top: 12px; }
+  .threshold-row label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .threshold-row input[type="range"] { flex: 1; -webkit-appearance: none; height: 2px; background: var(--border); outline: none; }
+  .threshold-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--accent2); cursor: pointer; border-radius: 0; }
+  .threshold-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--accent2); white-space: nowrap; min-width: 42px; text-align: right; }
+
+  .silence-result { display: none; background: var(--surface2); border: 1px solid var(--border); padding: 14px 20px; margin-top: 8px; font-size: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .silence-result.visible { display: flex; }
+  .silence-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sil-badge { padding: 3px 10px; border: 1px solid; font-size: 10px; letter-spacing: 1px; }
+  .sil-badge.removed { border-color: var(--accent); color: var(--accent); }
+  .sil-badge.saved { border-color: var(--success); color: var(--success); }
+
+  /* WAVEFORM */
+  #waveform-container { background: var(--surface); border: 1px solid var(--border); padding: 24px; margin-bottom: 20px; }
+  #waveform { width: 100%; height: 80px; position: relative; cursor: pointer; overflow: hidden; }
+  canvas#waveCanvas { width: 100%; height: 100%; display: block; }
+  #selectionOverlay { position: absolute; top: 0; height: 100%; background: rgba(255,60,95,0.15); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); pointer-events: none; }
+  .playhead { position: absolute; top: 0; width: 2px; height: 100%; background: white; pointer-events: none; }
+  .time-display { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 8px; letter-spacing: 1px; }
+  .time-display .selection-time { color: var(--accent); }
+
+  /* TRIM CONTROLS */
+  .trim-controls { background: var(--surface); border: 1px solid var(--border); padding: 24px; margin-bottom: 20px; }
+  .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .control-group label { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .control-group input[type="range"] { width: 100%; -webkit-appearance: none; height: 2px; background: var(--border); outline: none; margin-bottom: 6px; }
+  .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--accent); cursor: pointer; border-radius: 0; }
+  .range-value { font-size: 16px; font-family: 'Syne', sans-serif; font-weight: 700; }
+  .presets { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .preset-btn { padding: 6px 14px; border: 1px solid var(--border); background: none; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; }
+  .preset-btn:hover, .preset-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(255,60,95,0.05); }
+
+  /* BUTTONS */
+  .btn { padding: 13px 26px; font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: none; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #ff1a3f; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-secondary { background: none; color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--text); }
+  .btn-success { background: var(--success); color: #000; }
+  .btn-success:hover { background: #2ae08a; }
+  .btn-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .play-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.2s; flex-shrink: 0; }
+  .play-btn:hover { background: var(--accent); color: white; }
+
+  /* STEP 3 */
+  .preview-box { background: var(--surface); border: 1px solid var(--border); padding: 24px; margin-bottom: 24px; }
+  .preview-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .preview-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .clip-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-bottom: 20px; }
+  .stat { background: var(--surface2); padding: 16px; text-align: center; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; display: block; color: var(--accent); }
+  .stat-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+  .tiktok-form { display: flex; flex-direction: column; gap: 16px; }
+  .form-group label { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .form-group textarea, .form-group input[type="text"] { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 12px 16px; outline: none; transition: border 0.2s; resize: vertical; }
+  .form-group textarea:focus, .form-group input[type="text"]:focus { border-color: var(--accent); }
+  .char-count { font-size: 10px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+  .upload-area { background: var(--surface); border: 1px solid var(--border); padding: 32px; text-align: center; }
+  .progress-ring { width: 80px; height: 80px; margin: 0 auto 20px; position: relative; }
+  .progress-ring svg { transform: rotate(-90deg); }
+  .progress-ring circle { fill: none; stroke-width: 2; }
+  .progress-ring .track { stroke: var(--border); }
+  .progress-ring .fill { stroke: var(--accent); stroke-dasharray: 220; stroke-dashoffset: 220; transition: stroke-dashoffset 0.4s ease; }
+  .progress-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; }
+  .upload-status { font-size: 12px; letter-spacing: 1px; color: var(--muted); }
+
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+  .tiktok-note { font-size: 11px; color: var(--muted); line-height: 1.7; border-left: 2px solid var(--border); padding-left: 16px; margin-top: 16px; }
+  .tiktok-note a { color: var(--accent2); text-decoration: none; }
+
+  .notif { position: fixed; bottom: 32px; right: 32px; background: var(--surface2); border: 1px solid var(--border); padding: 14px 20px; font-size: 12px; letter-spacing: 0.5px; max-width: 320px; transform: translateY(80px); opacity: 0; transition: all 0.4s cubic-bezier(0.16,1,0.3,1); z-index: 1000; }
+  .notif.show { transform: translateY(0); opacity: 1; }
+  .notif.success { border-color: var(--success); }
+  .notif.error { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CLI<span>P</span></div>
+  <div class="badge">Audio → TikTok</div>
+</header>
+
+<main>
+  <h1>Graba. Corta. <em>Publica.</em></h1>
+  <p class="subtitle">// HERRAMIENTA DE CLIPS PARA TIKTOK</p>
+
+  <div class="steps">
+    <div class="step active" id="step1-indicator"><div class="step-num">1</div><span>Audio</span></div>
+    <div class="step" id="step2-indicator"><div class="step-num">2</div><span>Recortar</span></div>
+    <div class="step" id="step3-indicator"><div class="step-num">3</div><span>Publicar</span></div>
+  </div>
+
+  <!-- PANEL 1 -->
+  <div class="panel active" id="panel1">
+    <div class="source-tabs">
+      <div class="source-tab active" id="tabFile" onclick="switchSource('file')">
+        <span class="tab-icon">📂</span>
+        <span class="tab-label">Subir archivo</span>
+        <span class="tab-sub">MP3, WAV, AAC, FLAC</span>
+      </div>
+      <div class="source-tab" id="tabRec" onclick="switchSource('rec')">
+        <span class="tab-icon">🎙</span>
+        <span class="tab-label">Grabar</span>
+        <span class="tab-sub">Desde micrófono</span>
+      </div>
+      <div class="source-tab" id="tabSys" onclick="switchSource('sys')">
+        <span class="tab-icon">🖥</span>
+        <span class="tab-label">Capturar sistema</span>
+        <span class="tab-sub">Spotify, YouTube, etc.</span>
+      </div>
+    </div>
+
+    <!-- File -->
+    <div class="source-panel active" id="sourceFile">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="audio/*">
+        <span class="drop-icon">🎵</span>
+        <div class="drop-label">Arrastra tu track aquí</div>
+        <div class="drop-sub">MP3 · WAV · AAC · FLAC — hasta 500MB</div>
+      </div>
+      <div class="file-info" id="fileInfo">
+        <span class="fname" id="fileName">—</span>
+        <span class="fsize" id="fileSize">—</span>
+      </div>
+    </div>
+
+    <!-- Recorder -->
+    <div class="source-panel" id="sourceRec">
+      <div class="recorder-box">
+        <div class="rec-visualizer">
+          <canvas id="recCanvas"></canvas>
+        </div>
+        <div class="rec-timer" id="recTimer">0:00</div>
+        <div class="rec-status">
+          <div class="rec-dot" id="recDot"></div>
+          <span id="recStatusText">Listo para grabar</span>
+        </div>
+        <div class="rec-controls">
+          <button class="rec-btn" id="recResetBtn" title="Descartar" disabled onclick="resetRecording()">✕</button>
+          <button class="rec-btn rec-main" id="recMainBtn" onclick="toggleRecording()">●</button>
+          <button class="rec-btn" id="recUseBtn" title="Usar grabación" disabled onclick="useRecording()">✓</button>
+        </div>
+      </div>
+
+      <div class="threshold-row">
+        <label>Sensibilidad silencio</label>
+        <input type="range" id="silenceThreshold" min="0.001" max="0.05" step="0.001" value="0.012">
+        <span class="threshold-val" id="thresholdVal">0.012</span>
+      </div>
+
+      <div class="silence-result" id="silenceResult">
+        <span id="silenceText">—</span>
+        <div class="silence-badges" id="silenceBadges"></div>
+      </div>
+    </div>
+
+    <!-- System Audio -->
+    <div class="source-panel" id="sourceSys">
+      <div class="sysaudio-box">
+        <div class="os-warning" id="osWarning"></div>
+        <div class="sysaudio-vis"><canvas id="sysCanvas"></canvas></div>
+        <div class="sysaudio-timer" id="sysTimer">0:00</div>
+        <div class="sysaudio-status">
+          <div class="sysaudio-dot" id="sysDot"></div>
+          <span id="sysStatusText">Listo para capturar</span>
+        </div>
+        <div class="sysaudio-controls">
+          <button class="rec-btn" id="sysResetBtn" title="Descartar" disabled onclick="resetSysAudio()">✕</button>
+          <button class="btn-sys" id="sysMainBtn" onclick="toggleSysAudio()">● Capturar audio del sistema</button>
+          <button class="rec-btn" id="sysUseBtn" title="Usar captura" disabled onclick="useSysAudio()">✓</button>
+        </div>
+      </div>
+      <div class="threshold-row" style="margin-top:12px;">
+        <label>Sensibilidad silencio</label>
+        <input type="range" id="silenceThresholdSys" min="0.001" max="0.05" step="0.001" value="0.008">
+        <span class="threshold-val" id="thresholdValSys">0.008</span>
+      </div>
+      <div class="silence-result" id="silenceResultSys">
+        <span id="silenceTextSys">—</span>
+        <div class="silence-badges" id="silenceBadgesSys"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="toStep2Btn" disabled>Continuar → Recortar</button>
+    </div>
+  </div>
+
+  <!-- PANEL 2 -->
+  <div class="panel" id="panel2">
+    <div id="waveform-container">
+      <div id="waveform">
+        <canvas id="waveCanvas"></canvas>
+        <div id="selectionOverlay"></div>
+        <div class="playhead" id="playhead"></div>
+      </div>
+      <div class="time-display">
+        <span id="currentTimeDisplay">0:00</span>
+        <span class="selection-time" id="selectionDisplay">—</span>
+        <span id="totalTimeDisplay">0:00</span>
+      </div>
+    </div>
+
+    <div class="trim-controls">
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;">Presets de duración</div>
+      <div class="presets">
+        <button class="preset-btn" data-duration="15">15s</button>
+        <button class="preset-btn active" data-duration="30">30s</button>
+        <button class="preset-btn" data-duration="60">60s</button>
+        <button class="preset-btn" data-duration="90">90s</button>
+        <button class="preset-btn" data-duration="0">Manual</button>
+      </div>
+      <div class="control-row">
+        <div class="control-group">
+          <label>Inicio (segundos)</label>
+          <input type="range" id="startSlider" min="0" max="100" value="0" step="0.1">
+          <span class="range-value" id="startVal">0.0s</span>
+        </div>
+        <div class="control-group">
+          <label>Fin (segundos)</label>
+          <input type="range" id="endSlider" min="0" max="100" value="30" step="0.1">
+          <span class="range-value" id="endVal">30.0s</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-bottom:24px;">
+      <button class="play-btn" id="playBtn">▶</button>
+      <button class="btn btn-primary" id="clipBtn">✂ Generar Clip</button>
+      <button class="btn btn-secondary" id="backBtn1">← Atrás</button>
+    </div>
+  </div>
+
+  <!-- PANEL 3 -->
+  <div class="panel" id="panel3">
+    <div class="preview-box">
+      <div class="preview-label">Resumen del clip</div>
+      <div class="clip-stats">
+        <div class="stat"><span class="stat-value" id="clipDuration">—</span><div class="stat-label">Duración</div></div>
+        <div class="stat"><span class="stat-value" id="clipSize">—</span><div class="stat-label">Tamaño</div></div>
+        <div class="stat"><span class="stat-value" id="clipFormat">WAV</span><div class="stat-label">Formato</div></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="downloadBtn">⬇ Descargar Clip</button>
+        <button class="play-btn" id="playClipBtn">▶</button>
+      </div>
+    </div>
+
+    <div class="tiktok-form">
+      <div class="form-group">
+        <label>Caption / Descripción</label>
+        <textarea id="caption" rows="3" maxlength="2200" placeholder="Escribe tu caption para TikTok..."></textarea>
+        <div class="char-count"><span id="captionCount">0</span>/2200</div>
+      </div>
+      <div class="form-group">
+        <label>Hashtags</label>
+        <input type="text" id="hashtags" placeholder="#corridos #trap #nuevamusica">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="upload-area" id="uploadArea" style="display:none;">
+      <div class="progress-ring">
+        <svg viewBox="0 0 80 80" width="80" height="80">
+          <circle class="track" cx="40" cy="40" r="35"/>
+          <circle class="fill" id="progressCircle" cx="40" cy="40" r="35"/>
+        </svg>
+        <div class="progress-pct" id="progressPct">0%</div>
+      </div>
+      <div class="upload-status" id="uploadStatus">Preparando upload...</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-success" id="uploadBtn">↑ Subir a TikTok</button>
+      <button class="btn btn-secondary" id="backBtn2">← Volver a Recortar</button>
+    </div>
+
+    <p class="tiktok-note">
+      <strong>Nota:</strong> Para publicar en TikTok directamente necesitas conectar tu cuenta via TikTok Content API.
+      Mientras tanto, descarga el clip y súbelo desde TikTok.<br>
+      <a href="https://developers.tiktok.com/products/content-posting-api/" target="_blank">→ Documentación TikTok API</a>
+    </p>
+  </div>
+</main>
+
+<div class="notif" id="notif"></div>
+<audio id="clipPlayer"></audio>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let audioBuffer = null;
+let audioContext = null;
+let clipBlob = null;
+let isPlaying = false;
+let playSource = null;
+let playStartTime = 0;
+let playOffset = 0;
+let animFrame = null;
+let activeDuration = 30;
+
+// Recorder
+let mediaRecorder = null;
+let recChunks = [];
+let recStream = null;
+let recTimerInterval = null;
+let recSeconds = 0;
+let recAnalyserCtx = null;
+let recAnalyser = null;
+let recAnimFrame = null;
+let isRecording = false;
+
+const $ = id => document.getElementById(id);
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function goToStep(n) {
+  document.querySelectorAll('.panel').forEach((p,i) => p.classList.toggle('active', i+1===n));
+  document.querySelectorAll('.step').forEach((s,i) => {
+    s.classList.remove('active','done');
+    if (i+1 < n) s.classList.add('done');
+    if (i+1 === n) s.classList.add('active');
+  });
+}
+
+$('toStep2Btn').onclick = () => goToStep(2);
+$('backBtn1').onclick = () => goToStep(1);
+$('backBtn2').onclick = () => goToStep(2);
+
+// ============================================================
+// SOURCE TABS
+// ============================================================
+function switchSource(tab) {
+  ['file','rec','sys'].forEach(t => {
+    $('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t===tab);
+    $('source' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t===tab);
+  });
+  if (tab === 'sys') detectOSSupport();
+}
+
+// ============================================================
+// FILE UPLOAD
+// ============================================================
+const dropZone = $('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if(f) handleFile(f); });
+$('fileInput').onchange = e => { if(e.target.files[0]) handleFile(e.target.files[0]); };
+
+function handleFile(file) {
+  if (!file.type.startsWith('audio/')) { showNotif('Archivo no válido. Sube un audio.','error'); return; }
+  $('fileName').textContent = file.name;
+  $('fileSize').textContent = formatBytes(file.size);
+  $('fileInfo').classList.add('visible');
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioBuffer = await audioContext.decodeAudioData(e.target.result);
+      drawWaveform(); initSliders();
+      $('toStep2Btn').disabled = false;
+      showNotif('✓ Audio cargado — ' + file.name,'success');
+    } catch(err) { showNotif('Error al procesar el audio','error'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// RECORDER
+// ============================================================
+async function toggleRecording() {
+  if (!isRecording) { await startRecording(); } else { stopRecording(); }
+}
+
+async function startRecording() {
+  try { recStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch(e) { showNotif('No se puede acceder al micrófono','error'); return; }
+
+  // Setup analyser for live visualizer
+  recAnalyserCtx = new (window.AudioContext || window.webkitAudioContext)();
+  recAnalyser = recAnalyserCtx.createAnalyser();
+  recAnalyser.fftSize = 512;
+  const src = recAnalyserCtx.createMediaStreamSource(recStream);
+  src.connect(recAnalyser);
+  animateRecVisualizer();
+
+  recChunks = [];
+  mediaRecorder = new MediaRecorder(recStream, { mimeType: getSupportedMimeType() });
+  mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recChunks.push(e.data); };
+  mediaRecorder.onstop = processRecording;
+  mediaRecorder.start(100);
+
+  isRecording = true; recSeconds = 0;
+  $('recTimer').classList.add('recording');
+  $('recDot').classList.add('pulse');
+  $('recStatusText').textContent = 'Grabando...';
+  $('recMainBtn').innerHTML = '⏹';
+  $('recMainBtn').classList.add('is-recording');
+  $('recResetBtn').disabled = false;
+
+  recTimerInterval = setInterval(() => {
+    recSeconds++;
+    $('recTimer').textContent = formatTime(recSeconds);
+  }, 1000);
+}
+
+function getSupportedMimeType() {
+  const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return '';
+}
+
+function stopRecording() {
+  if (!mediaRecorder) return;
+  mediaRecorder.stop();
+  recStream.getTracks().forEach(t => t.stop());
+  clearInterval(recTimerInterval);
+  cancelAnimationFrame(recAnimFrame);
+  isRecording = false;
+  $('recTimer').classList.remove('recording');
+  $('recDot').classList.remove('pulse');
+  $('recStatusText').textContent = 'Procesando...';
+  $('recMainBtn').innerHTML = '●';
+  $('recMainBtn').classList.remove('is-recording');
+  $('recMainBtn').disabled = true;
+}
+
+async function processRecording() {
+  const mimeType = getSupportedMimeType() || 'audio/webm';
+  const blob = new Blob(recChunks, { type: mimeType });
+  const arrayBuffer = await blob.arrayBuffer();
+
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await ctx.decodeAudioData(arrayBuffer);
+    const originalDur = decoded.duration;
+
+    $('recStatusText').textContent = 'Eliminando silencios...';
+
+    const threshold = parseFloat($('silenceThreshold').value);
+    const stripped = stripSilence(decoded, threshold);
+    const newDur = stripped.duration;
+    const removed = (originalDur - newDur).toFixed(1);
+
+    $('silenceResult').classList.add('visible');
+    $('silenceText').textContent = `${originalDur.toFixed(1)}s → ${newDur.toFixed(1)}s`;
+    $('silenceBadges').innerHTML = `
+      <span class="sil-badge removed">-${removed}s silencio</span>
+      <span class="sil-badge saved">${newDur.toFixed(1)}s audio limpio</span>
+    `;
+
+    audioContext = ctx;
+    audioBuffer = stripped;
+    drawWaveform();
+    initSliders();
+
+    $('recUseBtn').disabled = false;
+    $('recStatusText').textContent = `✓ ${removed}s eliminados — presiona ✓ para continuar`;
+    showNotif(`✓ ${removed}s de silencio eliminados`, 'success');
+  } catch(err) {
+    showNotif('Error procesando grabación: ' + err.message, 'error');
+    $('recStatusText').textContent = 'Error — intenta de nuevo';
+    $('recMainBtn').disabled = false;
+  }
+}
+
+function useRecording() {
+  if (!audioBuffer) return;
+  $('toStep2Btn').disabled = false;
+  showNotif('✓ Grabación lista — continúa al recorte', 'success');
+}
+
+function resetRecording() {
+  if (isRecording) stopRecording();
+  recChunks = []; recSeconds = 0; isRecording = false;
+  $('recTimer').textContent = '0:00';
+  $('recTimer').classList.remove('recording');
+  $('recDot').classList.remove('pulse');
+  $('recStatusText').textContent = 'Listo para grabar';
+  $('recMainBtn').innerHTML = '●';
+  $('recMainBtn').disabled = false;
+  $('recMainBtn').classList.remove('is-recording');
+  $('recResetBtn').disabled = true;
+  $('recUseBtn').disabled = true;
+  $('silenceResult').classList.remove('visible');
+  $('toStep2Btn').disabled = true;
+  audioBuffer = null;
+  cancelAnimationFrame(recAnimFrame);
+  clearRecCanvas();
+}
+
+// ============================================================
+// SILENCE STRIPPING
+// ============================================================
+function stripSilence(buffer, threshold = 0.012, minSilenceSec = 0.2) {
+  const sr = buffer.sampleRate;
+  const frameSamples = Math.floor(0.02 * sr); // 20ms analysis window
+  const minSilenceFrames = Math.ceil(minSilenceSec / 0.02);
+  const totalFrames = Math.ceil(buffer.length / frameSamples);
+
+  const nCh = buffer.numberOfChannels;
+  const channels = [];
+  for (let c = 0; c < nCh; c++) channels.push(buffer.getChannelData(c));
+
+  // Compute RMS per frame
+  const energy = new Float32Array(totalFrames);
+  for (let f = 0; f < totalFrames; f++) {
+    const s = f * frameSamples;
+    const e = Math.min(s + frameSamples, buffer.length);
+    let sum = 0;
+    for (let c = 0; c < nCh; c++) {
+      for (let i = s; i < e; i++) sum += channels[c][i] ** 2;
+    }
+    energy[f] = Math.sqrt(sum / ((e - s) * nCh));
+  }
+
+  // Mark frames as silent/active
+  const silent = energy.map(e => e < threshold);
+
+  // Collect active segments (skip silence runs >= minSilenceFrames)
+  const segments = []; // [{start, end}] in samples
+  let f = 0;
+  while (f < totalFrames) {
+    if (!silent[f]) {
+      const segStart = f * frameSamples;
+      while (f < totalFrames && !silent[f]) f++;
+      segments.push({ start: segStart, end: Math.min(f * frameSamples, buffer.length) });
+    } else {
+      // count silent run
+      const runStart = f;
+      while (f < totalFrames && silent[f]) f++;
+      const runLen = f - runStart;
+      if (runLen < minSilenceFrames) {
+        // short silence — keep it (natural breath/pause)
+        const s = runStart * frameSamples;
+        const e = Math.min(f * frameSamples, buffer.length);
+        if (segments.length > 0) segments[segments.length-1].end = e;
+        else segments.push({ start: s, end: e });
+      }
+      // else: long silence dropped
+    }
+  }
+
+  if (segments.length === 0) return buffer;
+
+  // Merge adjacent segments
+  const merged = [segments[0]];
+  for (let i = 1; i < segments.length; i++) {
+    const last = merged[merged.length-1];
+    if (segments[i].start <= last.end) last.end = Math.max(last.end, segments[i].end);
+    else merged.push(segments[i]);
+  }
+
+  const totalOut = merged.reduce((a, s) => a + (s.end - s.start), 0);
+  if (totalOut <= 0) return buffer;
+
+  const outBuf = new AudioBuffer({ numberOfChannels: nCh, length: totalOut, sampleRate: sr });
+  for (let c = 0; c < nCh; c++) {
+    const src = channels[c];
+    const dst = outBuf.getChannelData(c);
+    let w = 0;
+    for (const seg of merged) {
+      const len = seg.end - seg.start;
+      for (let i = 0; i < len; i++) dst[w++] = src[seg.start + i] || 0;
+    }
+  }
+  return outBuf;
+}
+
+$('silenceThreshold').oninput = () => {
+  $('thresholdVal').textContent = parseFloat($('silenceThreshold').value).toFixed(3);
+};
+
+// ============================================================
+// RECORDER VISUALIZER
+// ============================================================
+function animateRecVisualizer() {
+  const canvas = $('recCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+
+  function frame() {
+    recAnimFrame = requestAnimationFrame(frame);
+    ctx.clearRect(0, 0, W, H);
+    if (!recAnalyser) { drawFlatLine(ctx, W, H); return; }
+    const data = new Uint8Array(recAnalyser.frequencyBinCount);
+    recAnalyser.getByteTimeDomainData(data);
+    ctx.beginPath();
+    ctx.strokeStyle = '#ff3c5f';
+    ctx.lineWidth = 1.5;
+    const sw = W / data.length;
+    for (let i = 0; i < data.length; i++) {
+      const x = i * sw;
+      const y = (data[i] / 128.0) * (H / 2);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  frame();
+}
+
+function drawFlatLine(ctx, W, H) {
+  ctx.beginPath(); ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+  ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+}
+
+function clearRecCanvas() {
+  const c = $('recCanvas');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  drawFlatLine(ctx, c.offsetWidth, c.offsetHeight);
+  recAnalyser = null;
+}
+
+// Init idle state
+(function initCanvas() {
+  const c = $('recCanvas');
+  c.width = c.offsetWidth || 400; c.height = 64;
+  drawFlatLine(c.getContext('2d'), c.width, c.height);
+})();
+
+// ============================================================
+// WAVEFORM
+// ============================================================
+function drawWaveform() {
+  const canvas = $('waveCanvas');
+  const container = canvas.parentElement;
+  canvas.width = container.offsetWidth;
+  canvas.height = 80;
+  const ctx = canvas.getContext('2d');
+  const data = audioBuffer.getChannelData(0);
+  const step = Math.max(1, Math.floor(data.length / canvas.width));
+  const amp = canvas.height / 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const startPct = parseFloat($('startSlider').value) / audioBuffer.duration;
+  const endPct = parseFloat($('endSlider').value) / audioBuffer.duration;
+  for (let i = 0; i < canvas.width; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[i*step+j] || 0;
+      if (v < min) min = v; if (v > max) max = v;
+    }
+    const pct = i / canvas.width;
+    ctx.fillStyle = (pct >= startPct && pct <= endPct) ? '#ff3c5f' : '#333';
+    ctx.fillRect(i, amp + min*amp*0.9, 1, Math.max(1, (max-min)*amp*0.9));
+  }
+  updateSelectionOverlay();
+}
+
+function updateSelectionOverlay() {
+  if (!audioBuffer) return;
+  const dur = audioBuffer.duration;
+  const start = parseFloat($('startSlider').value);
+  const end = parseFloat($('endSlider').value);
+  const w = $('waveform').offsetWidth;
+  const o = $('selectionOverlay');
+  o.style.left = (start/dur*w)+'px';
+  o.style.width = ((end-start)/dur*w)+'px';
+  $('startVal').textContent = start.toFixed(1)+'s';
+  $('endVal').textContent = end.toFixed(1)+'s';
+  $('selectionDisplay').textContent = `Selección: ${formatTime(start)} – ${formatTime(end)} (${(end-start).toFixed(0)}s)`;
+  $('totalTimeDisplay').textContent = formatTime(dur);
+  drawWaveform();
+}
+
+$('waveform').addEventListener('click', e => {
+  if (!audioBuffer) return;
+  const rect = $('waveform').getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  const time = pct * audioBuffer.duration;
+  const dur = activeDuration || 30;
+  const ns = Math.max(0, Math.min(time, audioBuffer.duration - dur));
+  $('startSlider').value = ns;
+  $('endSlider').value = Math.min(ns + dur, audioBuffer.duration);
+  updateSelectionOverlay();
+});
+
+// ============================================================
+// SLIDERS
+// ============================================================
+function initSliders() {
+  const dur = audioBuffer.duration;
+  $('startSlider').max = dur; $('endSlider').max = dur;
+  $('startSlider').value = 0;
+  $('endSlider').value = Math.min(activeDuration || 30, dur);
+  updateSelectionOverlay();
+}
+
+$('startSlider').oninput = () => {
+  const s = parseFloat($('startSlider').value);
+  if (activeDuration) $('endSlider').value = Math.min(s + activeDuration, audioBuffer.duration);
+  if (parseFloat($('endSlider').value) <= s) $('endSlider').value = s + 0.1;
+  updateSelectionOverlay();
+};
+$('endSlider').oninput = () => { if (!activeDuration) updateSelectionOverlay(); };
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeDuration = parseInt(btn.dataset.duration) || 0;
+    if (activeDuration && audioBuffer) {
+      $('endSlider').value = Math.min(parseFloat($('startSlider').value) + activeDuration, audioBuffer.duration);
+      updateSelectionOverlay();
+    }
+  };
+});
+
+// ============================================================
+// PLAYBACK
+// ============================================================
+$('playBtn').onclick = () => {
+  if (!audioBuffer || !audioContext) return;
+  if (isPlaying) { stopPlay(); return; }
+  const start = parseFloat($('startSlider').value);
+  const end = parseFloat($('endSlider').value);
+  if (audioContext.state === 'suspended') audioContext.resume();
+  playSource = audioContext.createBufferSource();
+  playSource.buffer = audioBuffer;
+  playSource.connect(audioContext.destination);
+  playSource.start(0, start, end - start);
+  playSource.onended = () => { isPlaying = false; $('playBtn').textContent = '▶'; cancelAnimationFrame(animFrame); };
+  playStartTime = audioContext.currentTime; playOffset = start;
+  isPlaying = true; $('playBtn').textContent = '⏹';
+  (function ph() {
+    const cur = playOffset + (audioContext.currentTime - playStartTime);
+    $('playhead').style.left = (cur / audioBuffer.duration * $('waveform').offsetWidth) + 'px';
+    $('currentTimeDisplay').textContent = formatTime(cur);
+    if (cur < parseFloat($('endSlider').value)) { animFrame = requestAnimationFrame(ph); }
+    else { isPlaying = false; $('playBtn').textContent = '▶'; }
+  })();
+};
+
+function stopPlay() {
+  if (playSource) { try { playSource.stop(); } catch(e){} }
+  isPlaying = false; $('playBtn').textContent = '▶';
+  cancelAnimationFrame(animFrame);
+}
+
+// ============================================================
+// GENERATE CLIP
+// ============================================================
+$('clipBtn').onclick = async () => {
+  if (!audioBuffer) return;
+  stopPlay();
+  const start = parseFloat($('startSlider').value);
+  const end = parseFloat($('endSlider').value);
+  const dur = end - start;
+  $('clipBtn').disabled = true; $('clipBtn').textContent = '⏳ Procesando...';
+  try {
+    const off = new OfflineAudioContext(audioBuffer.numberOfChannels, Math.ceil(dur*audioBuffer.sampleRate), audioBuffer.sampleRate);
+    const src = off.createBufferSource(); src.buffer = audioBuffer;
+    const gain = off.createGain();
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(1, Math.min(0.3, dur*0.1));
+    gain.gain.setValueAtTime(1, dur - Math.min(0.3, dur*0.1));
+    gain.gain.linearRampToValueAtTime(0, dur);
+    src.connect(gain); gain.connect(off.destination);
+    src.start(0, start, dur);
+    const rendered = await off.startRendering();
+    clipBlob = encodeWAV(rendered);
+    $('clipDuration').textContent = dur.toFixed(1)+'s';
+    $('clipSize').textContent = (clipBlob.size/1024).toFixed(0)+' KB';
+    $('clipPlayer').src = URL.createObjectURL(clipBlob);
+    goToStep(3);
+    showNotif('✓ Clip generado ('+dur.toFixed(1)+'s)','success');
+  } catch(err) { showNotif('Error: '+err.message,'error'); }
+  $('clipBtn').disabled = false; $('clipBtn').textContent = '✂ Generar Clip';
+};
+
+// ============================================================
+// PLAY CLIP
+// ============================================================
+$('playClipBtn').onclick = () => {
+  const p = $('clipPlayer');
+  if (p.paused) { p.play(); $('playClipBtn').textContent = '⏹'; p.onended = () => $('playClipBtn').textContent = '▶'; }
+  else { p.pause(); p.currentTime = 0; $('playClipBtn').textContent = '▶'; }
+};
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
+$('downloadBtn').onclick = () => {
+  if (!clipBlob) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(clipBlob);
+  a.download = 'clip_tiktok_'+Date.now()+'.wav'; a.click();
+  showNotif('⬇ Descarga iniciada','success');
+};
+
+// ============================================================
+// UPLOAD (DEMO)
+// ============================================================
+$('caption').oninput = () => { $('captionCount').textContent = $('caption').value.length; };
+
+$('uploadBtn').onclick = () => {
+  if (!clipBlob) { showNotif('Genera el clip primero','error'); return; }
+  $('uploadArea').style.display = 'block'; $('uploadBtn').disabled = true;
+  let pct = 0;
+  const msgs = [{at:0,msg:'Inicializando...'},{at:20,msg:'Conectando con TikTok API...'},{at:45,msg:'Subiendo audio...'},{at:75,msg:'Procesando en TikTok...'},{at:92,msg:'Finalizando...'},{at:100,msg:'¡Publicado!'}];
+  const iv = setInterval(() => {
+    pct += 2;
+    $('progressPct').textContent = pct+'%';
+    $('progressCircle').style.strokeDashoffset = 220-(pct/100*220);
+    const m = msgs.filter(x=>x.at<=pct).pop(); if(m) $('uploadStatus').textContent = m.msg;
+    if (pct >= 100) { clearInterval(iv); $('uploadBtn').disabled = false; showNotif('✓ Conecta tu cuenta TikTok para publicar automáticamente','success'); }
+  }, 60);
+};
+
+// ============================================================
+// SYSTEM AUDIO CAPTURE
+// ============================================================
+let sysRecording = false;
+let sysMediaRecorder = null;
+let sysChunks = [];
+let sysStream = null;
+let sysTimerInterval = null;
+let sysSeconds = 0;
+let sysAnalyser = null;
+let sysAnalyserCtx = null;
+let sysAnimFrame = null;
+
+function detectOSSupport() {
+  const ua = navigator.userAgent;
+  const isMac = /Mac OS X/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+  const warn = $('osWarning');
+
+  if (isMac) {
+    warn.classList.add('visible');
+    warn.innerHTML = `<strong>⚠ macOS detectado:</strong> Chrome/Safari bloquean la captura de audio del sistema por defecto.<br>
+    Para que funcione instala el driver virtual gratuito 
+    <a href="https://existential.audio/blackhole/" target="_blank">BlackHole</a> y selecciónalo como dispositivo de salida.
+    En Windows y Linux funciona sin configuración extra.`;
+  } else if (isSafari) {
+    warn.classList.add('visible');
+    warn.innerHTML = `<strong>⚠ Safari no soporta captura de audio del sistema.</strong> Abre esta página en Chrome o Edge para usar esta función.`;
+  } else {
+    warn.classList.remove('visible');
+  }
+}
+
+async function toggleSysAudio() {
+  if (!sysRecording) { await startSysAudio(); } else { stopSysAudio(); }
+}
+
+async function startSysAudio() {
+  if (!navigator.mediaDevices.getDisplayMedia) {
+    showNotif('Tu navegador no soporta captura de pantalla','error'); return;
+  }
+  try {
+    sysStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,          // required by API (we'll discard video track)
+      audio: {
+        systemAudio: 'include',
+        suppressLocalAudioPlayback: false,
+        echoCancellation: false,
+        noiseSuppression: false,
+        sampleRate: 48000
+      }
+    });
+  } catch(e) {
+    if (e.name === 'NotAllowedError') showNotif('Permiso denegado o cancelado','error');
+    else showNotif('Error al capturar: ' + e.message,'error');
+    return;
+  }
+
+  // Drop video track — we only need audio
+  sysStream.getVideoTracks().forEach(t => t.stop());
+
+  const audioTracks = sysStream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    showNotif('No se detectó audio del sistema. En macOS instala BlackHole.','error');
+    sysStream.getTracks().forEach(t => t.stop());
+    return;
+  }
+
+  // Live visualizer
+  sysAnalyserCtx = new (window.AudioContext || window.webkitAudioContext)();
+  sysAnalyser = sysAnalyserCtx.createAnalyser();
+  sysAnalyser.fftSize = 512;
+  const src = sysAnalyserCtx.createMediaStreamSource(sysStream);
+  src.connect(sysAnalyser);
+  animateSysVisualizer();
+
+  sysChunks = [];
+  sysMediaRecorder = new MediaRecorder(sysStream, { mimeType: getSupportedMimeType() });
+  sysMediaRecorder.ondataavailable = e => { if(e.data.size > 0) sysChunks.push(e.data); };
+  sysMediaRecorder.onstop = processSysAudio;
+  sysMediaRecorder.start(100);
+
+  sysRecording = true; sysSeconds = 0;
+  $('sysTimer').classList.add('recording');
+  $('sysDot').classList.add('pulse');
+  $('sysStatusText').textContent = 'Capturando audio del sistema...';
+  $('sysMainBtn').textContent = '⏹ Detener captura';
+  $('sysMainBtn').style.background = '#333';
+  $('sysMainBtn').style.color = 'var(--text)';
+  $('sysMainBtn').style.border = '1px solid var(--accent2)';
+  $('sysResetBtn').disabled = false;
+
+  sysTimerInterval = setInterval(() => {
+    sysSeconds++;
+    $('sysTimer').textContent = formatTime(sysSeconds);
+  }, 1000);
+}
+
+function stopSysAudio() {
+  if (!sysMediaRecorder) return;
+  sysMediaRecorder.stop();
+  sysStream.getTracks().forEach(t => t.stop());
+  clearInterval(sysTimerInterval);
+  cancelAnimationFrame(sysAnimFrame);
+  sysRecording = false;
+  $('sysTimer').classList.remove('recording');
+  $('sysDot').classList.remove('pulse');
+  $('sysStatusText').textContent = 'Procesando...';
+  $('sysMainBtn').textContent = '● Capturar audio del sistema';
+  $('sysMainBtn').style.background = '';
+  $('sysMainBtn').style.color = '';
+  $('sysMainBtn').style.border = '';
+  $('sysMainBtn').disabled = true;
+}
+
+async function processSysAudio() {
+  const mimeType = getSupportedMimeType() || 'audio/webm';
+  const blob = new Blob(sysChunks, { type: mimeType });
+  const arrayBuffer = await blob.arrayBuffer();
+
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await ctx.decodeAudioData(arrayBuffer);
+    const originalDur = decoded.duration;
+
+    $('sysStatusText').textContent = 'Eliminando silencios...';
+    const threshold = parseFloat($('silenceThresholdSys').value);
+    const stripped = stripSilence(decoded, threshold);
+    const newDur = stripped.duration;
+    const removed = (originalDur - newDur).toFixed(1);
+
+    $('silenceResultSys').classList.add('visible');
+    $('silenceTextSys').textContent = `${originalDur.toFixed(1)}s → ${newDur.toFixed(1)}s`;
+    $('silenceBadgesSys').innerHTML = `
+      <span class="sil-badge removed">-${removed}s silencio</span>
+      <span class="sil-badge saved">${newDur.toFixed(1)}s audio limpio</span>
+    `;
+
+    audioContext = ctx;
+    audioBuffer = stripped;
+    drawWaveform();
+    initSliders();
+
+    $('sysUseBtn').disabled = false;
+    $('sysStatusText').textContent = `✓ ${removed}s eliminados — presiona ✓ para continuar`;
+    showNotif(`✓ Audio del sistema capturado — ${newDur.toFixed(1)}s limpios`, 'success');
+  } catch(err) {
+    showNotif('Error procesando audio: ' + err.message, 'error');
+    $('sysStatusText').textContent = 'Error — intenta de nuevo';
+    $('sysMainBtn').disabled = false;
+  }
+}
+
+function useSysAudio() {
+  if (!audioBuffer) return;
+  $('toStep2Btn').disabled = false;
+  showNotif('✓ Audio del sistema listo — continúa al recorte', 'success');
+}
+
+function resetSysAudio() {
+  if (sysRecording) stopSysAudio();
+  sysChunks = []; sysSeconds = 0; sysRecording = false;
+  $('sysTimer').textContent = '0:00';
+  $('sysTimer').classList.remove('recording');
+  $('sysDot').classList.remove('pulse');
+  $('sysStatusText').textContent = 'Listo para capturar';
+  $('sysMainBtn').textContent = '● Capturar audio del sistema';
+  $('sysMainBtn').disabled = false;
+  $('sysMainBtn').style.background = '';
+  $('sysMainBtn').style.color = '';
+  $('sysMainBtn').style.border = '';
+  $('sysResetBtn').disabled = true;
+  $('sysUseBtn').disabled = true;
+  $('silenceResultSys').classList.remove('visible');
+  $('toStep2Btn').disabled = true;
+  audioBuffer = null;
+  cancelAnimationFrame(sysAnimFrame);
+  clearSysCanvas();
+}
+
+function animateSysVisualizer() {
+  const canvas = $('sysCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+
+  function frame() {
+    sysAnimFrame = requestAnimationFrame(frame);
+    ctx.clearRect(0, 0, W, H);
+    if (!sysAnalyser) { drawSysFlatLine(ctx, W, H); return; }
+    const data = new Uint8Array(sysAnalyser.frequencyBinCount);
+    sysAnalyser.getByteTimeDomainData(data);
+    ctx.beginPath();
+    ctx.strokeStyle = '#ff8c42';
+    ctx.lineWidth = 1.5;
+    const sw = W / data.length;
+    for (let i = 0; i < data.length; i++) {
+      const x = i * sw;
+      const y = (data[i] / 128.0) * (H / 2);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  frame();
+}
+
+function drawSysFlatLine(ctx, W, H) {
+  ctx.beginPath(); ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+  ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+}
+
+function clearSysCanvas() {
+  const c = $('sysCanvas');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  drawSysFlatLine(ctx, c.offsetWidth, c.offsetHeight);
+  sysAnalyser = null;
+}
+
+$('silenceThresholdSys').oninput = () => {
+  $('thresholdValSys').textContent = parseFloat($('silenceThresholdSys').value).toFixed(3);
+};
+
+// Init sys canvas idle state
+(function initSysCanvas() {
+  setTimeout(() => {
+    const c = $('sysCanvas');
+    if (c) { c.width = c.offsetWidth || 400; c.height = 56; drawSysFlatLine(c.getContext('2d'), c.width, c.height); }
+  }, 100);
+})();
+
+// ============================================================
+// WAV ENCODER
+// ============================================================
+function encodeWAV(buf) {
+  const nCh = buf.numberOfChannels, sr = buf.sampleRate;
+  const channels = []; for(let c=0;c<nCh;c++) channels.push(buf.getChannelData(c));
+  const idata = nCh===2 ? interleave(channels[0],channels[1]) : channels[0];
+  const ab = new ArrayBuffer(44+idata.length*2); const view = new DataView(ab);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++) view.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF'); view.setUint32(4,36+idata.length*2,true); ws(8,'WAVE');
+  ws(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,nCh,true);
+  view.setUint32(24,sr,true); view.setUint32(28,sr*nCh*2,true); view.setUint16(32,nCh*2,true); view.setUint16(34,16,true);
+  ws(36,'data'); view.setUint32(40,idata.length*2,true);
+  let off=44;
+  for(let i=0;i<idata.length;i++,off+=2){ const s=Math.max(-1,Math.min(1,idata[i])); view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); }
+  return new Blob([ab],{type:'audio/wav'});
+}
+
+function interleave(l,r){ const o=new Float32Array(l.length+r.length); let i=0,j=0; while(i<l.length){o[j++]=l[i];o[j++]=r[i++];} return o; }
+
+function formatTime(s){ return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); }
+function formatBytes(b){ return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
+
+function showNotif(msg, type='success') {
+  const n=$('notif'); n.textContent=msg; n.className='notif '+type+' show';
+  setTimeout(()=>n.classList.remove('show'),3500);
+}
+</script>
+</body>
+</html>
